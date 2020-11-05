@@ -1,4 +1,4 @@
-	# keyboard <!-- omit in TOC -->
+# keyboard <!-- omit in TOC -->
 
 ## Table of contents <!-- omit in TOC -->
 
@@ -16,7 +16,7 @@
 
 ## Layouts
 
-[Detailed design](https://docs.google.com/spreadsheets/d/1i8QfbnC41kJ8Fhe2n4VAXiONWaPQjeGDeqqHqsaXD2Y/edit?usp=sharing)
+The detailed design is available [here](https://docs.google.com/spreadsheets/d/1i8QfbnC41kJ8Fhe2n4VAXiONWaPQjeGDeqqHqsaXD2Y/edit?usp=sharing) (Google Sheets).
 
 These layouts are designed to be fully functional even on minimalist split keebs with only 30 main keys and three thumb keys per side. (Like the ["Microdox"](images/microdox.jpg) from [boardsource.xyz](https://boardsource.xyz/store/5f2e7e4a2902de7151494f92).)
 
