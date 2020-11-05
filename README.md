@@ -41,11 +41,11 @@ This layout is optimized to minimize use of pinkies, and index finger stretching
 E.g. ZSA, e.g. Planck Nano.
 
 - Company [produce page](https://ergodox-ez.com/pages/planck)
-- Download [t00mietum ROM](https://github.com/t00mietum/keyboard/blob/main/ergodox%20planck%20ez%20glow/planck_ez_glow_t00mietum-comfort.bin)
+- Download [t00mietum ROM](https://github.com/t00mietum/keyboard/blob/main/keeb%20-%20ergodox%20planck%20ez%20glow/planck_ez_glow_t00mietum-comfort.bin)
 - Forkable Oryx [configuration](https://configure.ergodox-ez.com/planck-ez/layouts/En5W5/)
 
 ### ZSA Moonlander Mark I
 
 - Company [produce page](https://www.zsa.io/moonlander/)
-- Download [t00mietum ROM](https://github.com/t00mietum/keyboard/blob/main/zsa%20moonlander/moonlander_t00mietum-comfort.bin)
+- Download [t00mietum ROM](https://github.com/t00mietum/keyboard/blob/main/keeb%20-%20zsa%20moonlander/moonlander_t00mietum-comfort.bin)
 - Forkable Oryx [configuration](https://configure.ergodox-ez.com/moonlander/layouts/7Qqby/)
