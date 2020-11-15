@@ -34,6 +34,40 @@ This layout is optimized to minimize use of pinkies, and index finger stretching
 
 ![Base layer](images/010-qwerty.png)
 
+### basic QWERTY/gaming
+
+![Base layer](images/030-gaming.png)
+
+### Navigation & media control
+
+![Base layer](images/040-nav.png)
+
+### Programming/symbols
+
+![Base layer](images/050-symbols.png)
+
+### Numpad
+
+Even if you've never been a cashier or accountant before, the numpad layout is super-easy to learn and vastly superior to a top-row 1 - 0 layout, even just for a random digit here or there.
+
+![Base layer](images/060-numpad.png)
+
+### Function keys
+
+![Base layer](images/070-fnkeys.png)
+
+### Mouse emulation
+
+![Base layer](images/080-mouse.png)
+
+### LED control
+
+![Base layer](images/090-led.png)
+
+### Oryx/flash
+
+![Base layer](images/100-board.png)
+
 ## ROMs
 
 ### Ergodox Planck EZ Glow
