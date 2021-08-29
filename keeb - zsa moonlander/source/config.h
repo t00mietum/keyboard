@@ -3,5 +3,17 @@
   See config.h options at https://docs.qmk.fm/#/config_options?id=the-configh-file
 */
 #define ORYX_CONFIGURATOR
-#define FIRMWARE_VERSION u8"7Qqby/wx0bP"
+#undef DEBOUNCE
+#define DEBOUNCE 10
+
+#undef TAPPING_TERM
+#define TAPPING_TERM 180
+
+#define PERMISSIVE_HOLD
+
+#undef RGB_DISABLE_TIMEOUT
+#define RGB_DISABLE_TIMEOUT 900000
+
+#define USB_SUSPEND_WAKEUP_DELAY 0
+#define FIRMWARE_VERSION u8"NyGy6/VRLBe"
 #define RGB_MATRIX_STARTUP_SPD 60
