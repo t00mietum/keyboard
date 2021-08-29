@@ -9,6 +9,7 @@
 - [External project links](#external-project-links)
 	- [Ergodox Planck EZ Glow](#ergodox-planck-ez-glow)
 	- [ZSA Moonlander Mark I](#zsa-moonlander-mark-i)
+	- [Boardsource Microdox](#boardsource-microdox)
 
 ## Summary
 
