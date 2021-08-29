@@ -41,8 +41,10 @@ This layer minimizes multifunction keys, which is necessary for gaming.
 
 ### Ergodox Planck EZ Glow
 
-E.g. ZSA, e.g. Planck Nano.
+- [Company produce page](https://ergodox-ez.com/pages/planck)
+- [Forkable Oryx configuration configuration](https://configure.zsa.io/moonlander/layouts/NyGy6/latest/1)
 
-- Company [produce page](https://ergodox-ez.com/pages/planck)
-- Forkable Oryx configuration [configuration](https://configure.zsa.io/moonlander/layouts/NyGy6/latest/1)
+### Boardsource Microdox
 
+- [Company product page](https://boardsource.xyz/store/5f2e7e4a2902de7151494f92)
+- [Online QMK Configurator for Boardsource Microdox split 3x5 JSON included in this project](https://config.qmk.fm/#/boardsource/microdox/LAYOUT_split_3x5_3) (or just about any other board)
