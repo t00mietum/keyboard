@@ -38,12 +38,12 @@ This layer minimizes multifunction keys, which is necessary for gaming.
 ### ZSA Moonlander Mark I
 
 - Company [produce page](https://www.zsa.io/moonlander/)
-- Forkable Oryx configuration [configuration](https://configure.zsa.io/moonlander/layouts/NyGy6/latest/1)
+- Forkable Oryx configuration [configuration](https://configure.zsa.io/moonlander/layouts/qBQ5A/)
 
 ### Ergodox Planck EZ Glow
 
 - [Company produce page](https://ergodox-ez.com/pages/planck)
-- [Forkable Oryx configuration configuration](https://configure.zsa.io/moonlander/layouts/NyGy6/latest/1)
+- [Forkable Oryx configuration configuration](https://configure.zsa.io/planck-ez/layouts/Zepz6/)
 
 ### Boardsource Microdox
 
