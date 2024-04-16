@@ -1,0 +1,80 @@
+accept          except
+affect          effect
+aloud           allowed
+are             our
+bear            bare
+birth           berth
+brake           break
+bread           bred
+buy             by             bye
+buy             by
+capital         capitol
+censor          sensor
+coarse          course
+complement      compliment
+council         counsel
+descent         dissent
+fair            fare
+feat            feet
+grate           great
+grown           groan
+heal            heel           he'll
+here            hear
+higher          hire
+hole            whole
+hour            our
+idle            idol
+it's            its
+its             it's
+knew            new
+lead            led
+lie             lay            ## Use lie to indicate the act of reclining: I am tired just watching the dog lie in the warm sunlight. Use lay to indicate the placement of something:  Please lay the paper on the table. Lay is a transitive verb, which means it always needs an object! Something is always being put down; lie, on the other hand, will never have an object because it is an intransitive verb. to lie: lie(s), lay, lain, lying; to lay: lay(s), laid, laid, laying
+lone            loan
+lose            loose
+mall            maul
+metal           medal          meddle
+might           mite
+missed          mist
+morning         mourning
+naval           navel
+oar             or             ore
+one             won
+pain            pane
+passed          past
+patience        patients
+peace           piece
+plain           plane
+pour            pore
+principle       principal
+rain            reign          rein
+read            red
+ring            wring
+road            rode           rowed
+root            route
+scene           seen
+scent           cent           sent
+shear           sheer
+shoe            shoo
+sight           site
+soar            sore
+soul            sole
+stair           stare
+stationary      stationery
+steal           steel
+suite           sweet
+tail            tale
+than            then
+there           their          they're
+threw           through
+tic             tick
+to              too            two
+vain            vane           vein
+wait            weight
+wander          wonder
+weather         whether
+which           witch
+wholly          holy
+whose           who's
+write           right          rite
+yoke            yolk
+you're          your
