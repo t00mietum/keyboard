@@ -60,4 +60,4 @@ When it comes to typing practice and speed tests, *what* you practice and test i
 
 It is still a work in progress, but currently provides over 10 minutes of excellent practice or testing at about 65 WPM.
 
-t00mietum typing practice and test text
+[t00mietum typing practice and test text](practice-text/r3wdp.md)
