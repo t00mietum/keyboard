@@ -10,6 +10,7 @@
 	- [Ergodox Planck EZ Glow](#ergodox-planck-ez-glow)
 	- [ZSA Moonlander Mark I](#zsa-moonlander-mark-i)
 	- [Boardsource Microdox](#boardsource-microdox)
+- [Typing practice and test text](#typing-practice-and-test-text)
 
 ## Summary
 
@@ -49,3 +50,14 @@ This layer minimizes multifunction keys, which is necessary for gaming.
 
 - [Company product page](https://boardsource.xyz/store/5f2e7e4a2902de7151494f92)
 - [Online QMK Configurator for Boardsource Microdox split 3x5 JSON included in this project](https://config.qmk.fm/#/boardsource/microdox/LAYOUT_split_3x5_3) (or just about any other board)
+
+### Typing practice and test text
+
+When it comes to typing practice and speed tests, *what* you practice and test is just as important - if not more - than how and with what program or web service. The practice & test text below begins by describing what makes it better. The text may be freely copy/pasted into any typing test service that allows custom user tests, such as:
+
+- [10FastFingers](https://10fastfingers.com/)
+- [Tipp10](https://online.tipp10.com/)
+
+It is still a work in progress, but currently provides over 10 minutes of excellent practice or testing at about 65 WPM.
+
+t00mietum typing practice and test text
