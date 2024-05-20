@@ -1,0 +1,542 @@
+#!/bin/bash
+# shellcheck disable=2001  ## Complaining about use of sed istead of bash search & replace.
+# shellcheck disable=2002  ## Useless use of cat. This works well though and I don't want to break it for the sake of syntax purity.
+# shellcheck disable=2004  ## Inappropriate complaining of "$/${} is unnecessary on arithmetic variables."
+# shellcheck disable=2034  ## Unused variables.
+# shellcheck disable=2086
+# shellcheck disable=2119  ## Disable confusing and inapplicable warning about function's $1 meaning script's $1.
+# shellcheck disable=2120  ## OK with declaring variables that accept arguments, without calling with arguments (this is 'overloading').
+# shellcheck disable=2143  ## Used grep -q instead of echo | grep
+# shellcheck disable=2155  ## Disable check to 'Declare and assign separately to avoid masking return values'.
+# shellcheck disable=2162
+# shellcheck disable=2181
+# shellcheck disable=2317  ## Can't reach
+# shellcheck disable=2140  ## Complains about valid 'mount' syntax.
+
+##	Purpose: Concatenates all files in './t00mtest source lines/', randomizes the lines, and runs a 'ttest' on the specified number of words (default 500).
+##	History:
+##		- 20240501 JC: Created from TEMPLATE_single-file_20230926.
+
+
+## Constants
+declare    meName="$(basename "${BASH_SOURCE[0]}")"
+
+## Options
+declare    CONVERT_TO=blok #.........................................: If you want to force the ROM type (which will influence a file type of hex, bin, or uf2)
+declare    zipMountDir=~/"mnt/zip/•FILENAME•_•SERIAL•" #.............: Supports macros "•FILENAME•" and "•SERIAL•"
+declare    overlayTargetRootDir=~/"mnt/overlayfs/${meName}"
+
+## Misc global variables needed for multiple functions (may be locked down in individual functions as read-only locals)
+declare    overlayTargetRootBaseDir=""
+declare    overlay_mnt_rw="mnt"
+declare    overlay_upper="artifacts"
+declare    overlay_working=".tmp"
+declare -i didMount_Zip=0
+declare -i didMount_OverlayFS=0
+
+## Boilerplate constants (but don't actually make read-only because of errors during script-managed recursion).
+declare -i doSkipIntroStuff=0
+declare -i doQuietly=0; [[ "${TEMPLATE_QUIET}" == "1" ]] && doQuietly=1
+declare    thisVersion="0.9.0"
+declare    copyrightYear="2024"
+declare    author="t00mietum"
+
+
+#•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+fPrint_Copyright(){ ((doQuietly)) && return; fEcho_Clean "";
+	cat <<- EOF_q9tan
+		${meName} version ${thisVersion}
+		Copyright (c) ${copyrightYear} ${author}.
+		License GPLv3+: GNU GPL version 3 or later, full text at:
+		    https://www.gnu.org/licenses/gpl-3.0.en.html
+		There is no warranty, to the extent permitted by law.
+	EOF_q9tan
+	fEcho_Force ""
+}
+fPrint_WillDo(){ fEcho_Clean "";
+	#  X-------------------------------------------------------------------------------X
+	cat <<- EOF_r5k9t
+		Compiles a QMK keyboard layout from "full source" downloaded for your layout
+		from the online QMK Configurator at https://config.qmk.fm/.
+
+		This script will:
+		    - Update your local QMK repo, if it isn't already.
+		    - Create a temporary OverlayFS of:
+		        - Your local QMK repo (as read-only) to provide necessary missing
+		          dependencies that your "full source" doesn't have.
+		        - Your mounted QMK "source files" zip (as read-only) on top of that,
+		          taking precedence.
+		        - A writable folder for output that you can save.
+		    - Unwind the OverlayFS, except for the folder that hopefully contains your
+		      new firmware, any other new output, and a copy of your .json file.
+	EOF_r5k9t
+	#  X-------------------------------------------------------------------------------X
+	fEcho_Force
+}
+fPrintSyntax(){ ((doQuietly)) && return; fEcho_Clean "";
+	#  X-------------------------------------------------------------------------------X
+	cat <<- EOF_ng50ne2
+		Syntax: ${meName} <"full source" ZIP filespec>  <short name>
+
+		<"full source" ZIP filespec>:
+		Path/filename of the pip file you downloaded from QMK Configurator.
+
+		<short name>:
+		A <=16 character short name to rename your layout's .json. The final output
+		will also be named this, plus "_YYYYMMDD-HHMMSS.zip"
+	EOF_ng50ne2
+	#  X-------------------------------------------------------------------------------X
+	fEcho_Force
+}
+
+
+#•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+fMain(){
+
+	## Lock down globals
+	local -r    meName="${meName}"
+	local -r -i doSkipIntroStuff=${doSkipIntroStuff}
+	local -r -i doQuietly=${doQuietly}
+	local -r    thisVersion="${thisVersion}"
+	local -r    copyrightYear="${copyrightYear}"
+	local -r    author="${author}"
+
+	## Args
+	local -r allArgs="$*"
+	local    zipFile="$1"  ## Will make read-only later
+	local -r shortName="$2"
+
+	## Constants
+	local -r serialDateTime="$(date '+%Y%m%d-%H%M%S')"
+
+	## Lock down globals for use in this function
+	local -r overlay_mnt_rw="${overlay_mnt_rw}"
+	local -r overlay_upper="${overlay_upper}"
+	local -r overlay_working="${overlay_working}"
+
+	## Variables
+	local    errMsg_MissingDeps=""
+	local    zipFilenamePrefix=""
+	local    endResultFilespec=""
+
+	## Determine if we need to show help
+	case " ${allArgs,,} " in
+		*" -h "*|*" --help "*)                 fPrint_Copyright_WillDo_Syntax 1; exit 0 ;;
+		*" -v "*|*" --ver "*|*" --version "*)  fPrint_Copyright_WillDo_Syntax  ; exit 0 ;;
+	esac
+	if [[ -z "${zipFile}"   ]]; then fPrint_Copyright_WillDo_Syntax 1; exit 1; fi
+	if [[ -z "${shortName}" ]]; then fPrint_Copyright_WillDo_Syntax 1; exit 1; fi
+
+	## Overlay dirs
+	local -r overlayTargetRootDir="${overlayTargetRootDir}" #................. Lock global down for use in this function.
+	overlayTargetRootBaseDir="${overlayTargetRootDir}/${serialDateTime}" #.... Set global (for here and later use in fCleanup).
+	local -r overlayTargetRootBaseDir="${overlayTargetRootBaseDir}" #......... Lock global down for use in this function.
+
+	## Get zip filename
+	local -r zipFileName="$(basename "${zipFile}" 2>/dev/null || true)"
+	local -r zipFilenamePrefix="${zipFileName%.*}"
+	local -r compileArtifactsZip="${overlayTargetRootDir}/${shortName}_${serialDateTime}.zip"
+
+	## Validate
+	[[ ! -f "${zipFile}"                                  ]] && fThrowError  "The 'full source' .zip file specified doesn't seem to exist: '${zipFile}'."  "${FUNCNAME[0]}"
+	[[   -z "${zipFileName}"                              ]] && fThrowError  "Couldn't determine .zip filename from '${zipFile}'."  "${FUNCNAME[0]}"
+	[[ -z   "$(which qmk            2>/dev/null || true)" ]] && errMsg_MissingDeps="${errMsg_MissingDeps}\nqmk (try 'pipx install qmk; if no pipx, use your system package manager)"
+	[[ -z   "$(which sde            2>/dev/null || true)" ]] && errMsg_MissingDeps="${errMsg_MissingDeps}\nsde (try 'pipx install sde; if no pipx, try regular pypthon pip installer)"
+	[[ -z   "$(which jq             2>/dev/null || true)" ]] && errMsg_MissingDeps="${errMsg_MissingDeps}\njq (should be available through your system package manager)"
+	[[ -z   "$(which make           2>/dev/null || true)" ]] && errMsg_MissingDeps="${errMsg_MissingDeps}\nmake (try installing 'build-essentials' with your system package manager)"
+	[[ -z   "$(which git            2>/dev/null || true)" ]] && errMsg_MissingDeps="${errMsg_MissingDeps}\ngit (should be available through your system package manager)"
+	[[ -z   "$(which zip            2>/dev/null || true)" ]] && errMsg_MissingDeps="${errMsg_MissingDeps}\nzip (should be available through your system package manager)"
+	[[ -z   "$(which fuse-zip       2>/dev/null || true)" ]] && errMsg_MissingDeps="${errMsg_MissingDeps}\nfuse-zip (should be available through your system package manager)"
+	[[ -z   "$(which fuse-overlayfs 2>/dev/null || true)" ]] && errMsg_MissingDeps="${errMsg_MissingDeps}\nfuse-overlayfs (should be available through your system package manager)"
+	if [[ -n "${errMsg_MissingDeps}" ]]; then
+		## Clean up and show error message
+		errMsg_MissingDeps="**** MISSING DEPENDENCIES ****:\n${errMsg_MissingDeps}"
+		fEcho_Clean "${errMsg_MissingDeps}"
+		fPrint_Copyright_WillDo_Syntax
+		exit 1
+	fi
+
+	## Get canonical zipfile path (otherwise fuse-zip seems to have a problem)
+	local -r zipFile="$(realpath -s -e "${zipFile}")"
+
+	## Get and validate QMK firmware directory
+	cd ~
+	local -r qmkHomeDir="$(qmk config user.qmk_home 2>/dev/null | grep -iPo "=.*" | grep -iPo "[^=]+" || true)"
+	[[   -z "${qmkHomeDir}" ]] && fThrowError  "QMK property 'user.qmk_home', which should point to a generic QMK firmware directory, doesn't seem to be configured via 'qmk config'."  "${FUNCNAME[0]}"
+	[[ ! -d "${qmkHomeDir}" ]] && fThrowError  "QMK firmware directory specified in the QMK property 'user.qmk_home' doesn't seem to exist: '${qmkHomeDir}'."  "${FUNCNAME[0]}"
+
+	## Process macros in variables
+	zipMountDir="${zipMountDir//'•FILENAME•'/"${zipFileName}"}" #...............: Supports macros "•FILENAME•" and "•SERIAL•"
+	zipMountDir="${zipMountDir//'•SERIAL•'/"${serialDateTime}"}"
+	local -r zipMountDir="${zipMountDir}"
+
+	## Validate
+	[[ -d "${overlayTargetRootBaseDir}" ]] && fThrowError  "The new location for compile artifacts seems to already exist: '${overlayTargetRootBaseDir}'."  "${FUNCNAME[0]}"
+
+	## Prompt to continue
+	fEcho_Clean
+	fPrint_Copyright; fPrint_WillDo
+	fEcho_Clean
+	fEcho_Clean "Zipped 'full source' from https://config.qmk.fm/ (canonicalized for fuse-zip):"
+	fEcho_Clean "${zipFile}"
+	fEcho_Clean
+	fEcho_Clean "Full install of stock QMK firmware:"
+	fEcho_Clean "${qmkHomeDir}"
+	fEcho_Clean
+	fEcho_Clean "Temporary read-only mount location for zip:"
+	fEcho_Clean "${zipMountDir}"
+	fEcho_Clean
+	fEcho_Clean "Temporary overlay compile location:"
+	fEcho_Clean "${overlayTargetRootBaseDir}/${overlay_mnt_rw}"
+	fEcho_Clean
+	fEcho_Clean "Zip of final compile artifacts:"
+	fEcho_Clean "${compileArtifactsZip}"
+	fEcho_Clean
+	read -r -p "Continue? (y/n): " answer
+	fEcho_ResetBlankCounter
+	if [[ "${answer,,}" != "y" ]]; then
+		fEcho "User aborted."
+		exit 1
+	fi
+
+	## Update QMK firmware
+	fEcho; fEcho "Updating QMK firmware ..."
+	qmk setup
+
+	## Mount ZIP file
+	fEcho; fEcho "Mounting zip file '${zipFile}' to read-only '${zipMountDir}' ..."
+	[[   -n "$(ls -A "${zipMountDir}" 2>/dev/null || true)" ]] && fThrowError  "The intended zip file mountpoint is already populated: '${zipMountDir}'."  "${FUNCNAME[0]}"
+	[[ ! -d "${zipMountDir}" ]] && mkdir -p "${zipMountDir}"
+	fuse-zip -r -o uid=$(id -u),gid=$(id -g) "${zipFile}" "${zipMountDir}"
+	didMount_Zip=1
+
+	## Create OverlyFS writeable dirs
+	fEcho; fEcho "Creating OverlayFS '${overlayTargetRootBaseDir}' ..."
+	mkdir -p "${overlayTargetRootBaseDir}/${overlay_mnt_rw}"
+	mkdir -p "${overlayTargetRootBaseDir}/${overlay_upper}"
+	mkdir -p "${overlayTargetRootBaseDir}/${overlay_working}"
+	fuse-overlayfs -o lowerdir="${zipMountDir}:${qmkHomeDir}",upperdir="${overlayTargetRootBaseDir}/${overlay_upper}",workdir="${overlayTargetRootBaseDir}/${overlay_working}" "${overlayTargetRootBaseDir}/${overlay_mnt_rw}"
+	didMount_OverlayFS=1
+
+	fEcho
+
+	## Change to the dir
+	cd "${overlayTargetRootBaseDir}/${overlay_mnt_rw}"
+
+	## Remove existing binaries
+	fEcho "Removing compiled existing binaries that may not be appropriate for target ..."
+	[[ $(ls -1A *.hex 2>/dev/null | wc -l || true) -ge 1 ]] && rm *.hex
+	[[ $(ls -1A *.hex 2>/dev/null | wc -l || true) -ge 1 ]] && rm *.bin
+	[[ $(ls -1A *.hex 2>/dev/null | wc -l || true) -ge 1 ]] && rm *.uf2
+
+	## Rename .json to be shorter
+	[[ $(ls -1A *.json 2>/dev/null | wc -l || true) != 1 ]] && fThrowError  "Found <> 1 '.json' file in '${overlayTargetRootBaseDir}/${overlay_mnt_rw}/'."  "${FUNCNAME[0]}"
+	fEcho "Renaming '$(ls -1A *.json)' -> '${shortName}.json' ..."
+	mv "$(ls -1A *.json)" "${shortName}.json" || true
+
+#	fEcho_Clean; read -r -p "Press any key to continue: " answer; fEcho_Force
+
+	## Edit .json
+	fEcho "Editing '${shortName}.json' for shorter entries ..."
+	sde  "keymap"        "${shortName}"                                                   "${shortName}.json"  ## Shorten keyboard name within .json
+	sde  "documentation" "Downloaded from https://config.qmk.fm, modified by ${meName}."  "${shortName}.json"  ## Shorten documentation field within .json
+
+	## Get keyboard and validate
+	local vKb="$(jq ".keyboard" "${shortName}.json")"
+	local -r vKb="${vKb//\"/}"
+	[[   -z "${vKb}" ]] && fThrowError  "Couldn't determine keyboard from 'keyboard' json key in '${overlayTargetRootBaseDir}/${overlay_mnt_rw}/${shortName}.json'."  "${FUNCNAME[0]}"
+	[[ ! -d "keyboards/${vKb}" ]] && fThrowError  "Expected folder doesn't exist: '${overlayTargetRootBaseDir}/${overlay_mnt_rw}/keyboards/${vKb}'."  "${FUNCNAME[0]}"
+
+	## Maybe add convert-to value
+	if [[ -n "${CONVERT_TO}" ]]; then
+		fEcho "Adding 'CONVERT_TO=${CONVERT_TO}' to 'keyboards/${vKb}/rules.mk' ..."
+		echo "CONVERT_TO=${CONVERT_TO}" >> "keyboards/${vKb}/rules.mk"
+	fi
+
+	## Enable double-tap reset button bootloader behavior (which may be default for but just in case)
+	fEcho "Adding reset button double-tap for bootloader behavior to 'keyboards/${vKb}/config.c' ..."
+	echo "#define RP2040_BOOTLOADER_DOUBLE_TAP_RESET // Activates the double-tap behavior"                                    >> "keyboards/${vKb}/config.c"
+	echo "#define RP2040_BOOTLOADER_DOUBLE_TAP_RESET_TIMEOUT 200U // Timeout window in ms in which the double tap can occur." >> "keyboards/${vKb}/config.c"
+
+	## Fix an annoying problem that stops make:
+	if [[ -f "builddefs/build_keyboard.mk" ]] && [[ -n "$(grep 'generate-version-h $(VERSION_H_FLAGS)'  "builddefs/build_keyboard.mk")" ]]; then
+		fEcho "Fixing an annoying problem that stops make, at about line 62 in 'builddefs/build_keyboard.mk' ..."
+		sed -i 's/generate-version-h $(VERSION_H_FLAGS) //g'  "builddefs/build_keyboard.mk"
+		if [[ -n "$(grep 'generate-version-h $(VERSION_H_FLAGS)'  "builddefs/build_keyboard.mk" 2>/dev/null || true)" ]]; then
+			fThrowError  "Failed to fix the problem with 'sed'."  "${FUNCNAME[0]}"
+		fi
+	else
+		fEcho "Note: Not fixing bug in 'builddefs/build_keyboard.mk', as the offending string 'generate-version-h \$(VERSION_H_FLAGS)' at about line 62 may no longer exist, or the file isn't there anymore."
+	fi
+
+	## Get ready
+	fEcho; fEcho "Setting QMK properties ..."
+	qmk config user.keyboard="${vKb}"
+	qmk import-keymap "${shortName}.json"
+	fEcho_ResetBlankCounter
+
+#	## Run QMK Lint (this will probably and ironically fail unnecessarily from QMK Configurator)
+#	fEcho; fEcho "Running 'qmk lint' ..."
+#	qmk lint
+
+	## Run QMK Doctor
+	fEcho; fEcho "Running 'qmk doctor' ..."
+	qmk doctor 2>&1 | tee qmk-doctor.log || true
+
+	## Compile
+	fEcho; fEcho "Compiling ..."
+	qmk compile  -c  -kb "${vKb}"  -km "${shortName}"  "${shortName}.json" 2>&1 | tee qmk-compile.log
+	fEcho_ResetBlankCounter
+
+	#fEcho_Clean; read -n1 -s -r -p "Note any warnings, and press space to continue: " answer; fEcho_Force
+
+	## Rename results with serial at the end
+	fEcho; fEcho "Renaming stuff ..."
+	mv "${shortName}.json" "${shortName}_${serialDateTime}.json"
+	[[ $(ls -1A *.hex  2>/dev/null | wc -l || true) -ge 1 ]] && mv "$(ls -1A *.hex  2>/dev/null)" "${shortName}_${serialDateTime}.hex"
+	[[ $(ls -1A *.bin  2>/dev/null | wc -l || true) -ge 1 ]] && mv "$(ls -1A *.bin  2>/dev/null)" "${shortName}_${serialDateTime}.bin"
+	[[ $(ls -1A *.uf2  2>/dev/null | wc -l || true) -ge 1 ]] && mv "$(ls -1A *.uf2  2>/dev/null)" "${shortName}_${serialDateTime}.uf2"
+
+	## Zip up results
+	fEcho; fEcho "Zipping up useful artifacts ..."
+	cd "${overlayTargetRootBaseDir}/${overlay_upper}"
+	zip -rq "${compileArtifactsZip}" .
+	fEcho_ResetBlankCounter
+	fEcho_Clean "Created '${compileArtifactsZip}'."
+	fEcho_Clean
+
+}
+
+
+#•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+fCleanup(){
+
+	##Debug
+	#echo "didMount_OverlayFS='$didMount_OverlayFS'"
+	#echo "overlayTargetRootBaseDir='${overlayTargetRootBaseDir}'"
+	#echo "didMount_Zip='$didMount_Zip'"
+	#echo "zipMountDir='${zipMountDir}'"
+
+	cd ~
+
+	## Clean up overlay mounts
+	if [[ $didMount_OverlayFS -eq 1 ]] && [[ -n "${overlayTargetRootBaseDir}" ]]; then
+		fUmount "${overlayTargetRootBaseDir}/${overlay_mnt_rw}" 1
+		if [[ -z "$(ls -A "${overlayTargetRootBaseDir}/${overlay_mnt_rw}" 2>/dev/null || true)" ]]; then
+			fRmDir "${overlayTargetRootBaseDir}" 1
+		fi
+	fi
+
+	## Clean up zip mount
+	if [[ $didMount_Zip -eq 1 ]]; then
+		fUmount "${zipMountDir}" 1
+		fRmDir  "${zipMountDir}" 1 1
+	fi
+
+	if ((! doSkipIntroStuff)) && ((! doQuietly)); then :;
+		fEcho_Clean
+	fi
+
+}
+
+
+#•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+fPrint_Help(){
+	((doQuietly)) && return
+#	fEcho_Clean ""
+#	#  X-------------------------------------------------------------------------------X
+#	cat <<- EOF_q9tdz
+#	EOF_q9tdz
+#	#  X-------------------------------------------------------------------------------X
+#	fEcho_Force ""
+}
+
+
+#•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+fPrint_Copyright_WillDo_Syntax(){
+	fPrint_Copyright
+	fPrint_WillDo
+	fPrintSyntax
+	[[ "$1" == "1" ]] && fPrint_Help
+}
+
+
+
+
+#•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+##	Generic code.
+#•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+
+fUmount(){
+
+	## Args
+	local    -r unmountDir="$1"
+	local       raw_ignoreError="$2"
+
+	## Convert string arg[s] to boolean constant[s]
+	local -i ignoreError=0; [[ "${raw_ignoreError}" =~ "1"|"true"|"TRUE" ]] && ignoreError=1; local -i -r ignoreError=$ignoreError
+
+	## Validate
+	[[   -z "${unmountDir}"              ]] && fThrowError  "No directory to unmount specified."                    "${FUNCNAME[0]}"
+	[[ ! -d "${unmountDir}"              ]] && fThrowError  "Directory to unmount doesn't exist: '${unmountDir}'."  "${FUNCNAME[0]}"
+	[[      "${unmountDir}" == "/"       ]] && fThrowError  "I refuse to try to unmount '/'!."                      "${FUNCNAME[0]}"
+	[[      "${unmountDir}" == "${HOME}" ]] && fThrowError  "I refuse to try to unmount '${HOME}'!."                "${FUNCNAME[0]}"
+
+	if [[ -z "$(mount | grep " ${unmountDir} " 2>/dev/null || true)" ]]; then
+		fEcho "No need to umnout, as it's not mounted: '${unmountDir}' ..."
+		return 0
+	else
+		fEcho "Unmounting '${unmountDir}' ..."
+		umount "${unmountDir}" || true
+	fi
+
+	[[ -z "$(mount | grep " ${unmountDir} " 2>/dev/null || true)" ]] && return 0
+	echo "Getting sudo for more forceful 'umount' ..."
+	sudo echo "Sudo got."
+	sync; sleep 1
+	sudo umount -fR "${unmountDir}" || true
+
+	[[ -z "$(mount | grep " ${unmountDir} " 2>/dev/null || true)" ]] && return 0
+	sudo umount -fAR "${unmountDir}" || true
+
+	[[ -z "$(mount | grep " ${unmountDir} " 2>/dev/null || true)" ]] && return 0
+	sudo umount -fARl "${unmountDir}" || true
+	sync; sleep 1
+
+	[[ $ignoreError -eq 0 ]] && [[ -n "$(mount | grep " ${unmountDir} " 2>/dev/null || true)" ]] && fThrowError "Unable to unmount '${unmountDir}'." "${FUNCNAME[0]}"
+
+}
+
+
+fRmDir(){
+	local    -r rmDir="$1"
+	local       raw_ignoreError="$2"
+	local       raw_mustBeEmpty="$3"
+
+	## Convert string arg[s] to boolean constant[s]
+	local -i ignoreError=0; [[ "${raw_ignoreError}" =~ "1"|"true"|"TRUE" ]] && ignoreError=1; local -i -r ignoreError=$ignoreError
+	local -i mustBeEmpty=0; [[ "${raw_mustBeEmpty}" =~ "1"|"true"|"TRUE" ]] && mustBeEmpty=1; local -i -r mustBeEmpty=$mustBeEmpty
+
+	## Validate
+	[[   -z "${rmDir}"               ]] && fThrowError  "No folder to delete specified."               "${FUNCNAME[0]}"
+	[[ ! -d "${rmDir}"               ]] && fThrowError  "Folder to delete doesn't exist: '${rmDir}'."  "${FUNCNAME[0]}"
+	[[      "${rmDir}" == "/"        ]] && fThrowError  "I refuse to try to delete '/'!."              "${FUNCNAME[0]}"
+	[[      "${rmDir}" == "${HOME}"  ]] && fThrowError  "I refuse to try to delete '${HOME}/'!."       "${FUNCNAME[0]}"
+	[[      "${rmDir}" == "${HOME}/" ]] && fThrowError  "I refuse to try to delete '${HOME}/'!."       "${FUNCNAME[0]}"
+
+	## Is empty?
+	if [[ $mustBeEmpty -eq 1 ]] && [[ -n "$(ls -A "${rmDir}" 2>/dev/null || true)" ]]; then
+		fThrowError  "Can't delete non-empty folder '${rmDir}/'." "${FUNCNAME[0]}"
+	fi
+
+	fEcho "Removing folder '${rmDir}' ..."
+
+	if [[ $ignoreError -eq 1 ]]; then
+		rm -rf "${rmDir}" 2>/dev/null || true
+	else
+		rm -rf "${rmDir}"
+	fi
+
+}
+
+
+#•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+##	Generic echo-related stuff.
+##	History:
+##		- 20190911 JC: Created (mostly by copying TEMPLATE_v*)
+#•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+declare -i _wasLastEchoBlank=0
+function fEcho_Clean(){
+	if [[ -n "$*" ]]; then
+		echo -e "$*"
+		_wasLastEchoBlank=0
+	elif [[ $_wasLastEchoBlank -eq 0 ]] && echo; then
+		_wasLastEchoBlank=1
+	fi
+}
+# shellcheck disable=2120  ## References arguments, but none are ever passed; Just because this library function isn't called here, doesn't mean it never will in other scripts.
+function fEcho()                   { if [[ -n "$*" ]]; then fEcho_Clean "[ $* ]"; else fEcho_Clean ""; fi; }
+function fEcho_Force()             { fEcho_ResetBlankCounter; fEcho "$*";                                  }
+function fEcho_Clean_Force()       { fEcho_ResetBlankCounter; fEcho_Clean "$*";                            }
+function fEchoVarAndVal()          { fEcho_Clean "${2}${1} = '${!1}'";                                     }
+function fEcho_ResetBlankCounter() { _wasLastEchoBlank=0;                                                  }
+
+#•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+##	Generic error-handling  stuff.
+##	History
+##		- 20190826 JC: Created by copying from 0_library_v2.
+##		- 20190919 JC: Slight tweaks to improve newline output.
+#•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+declare -i _wasCleanupRun=0
+function fThrowError(){
+	local errMsg="$1"
+	local funcName="$2"
+	[[ -z "${errMsg}" ]] && errMsg="An error occurred."
+	if [[ -z "${errMsg}" ]]; then
+		errMsg="${meName}: ${errMsg}"
+	else
+		errMsg="${meName}.$2(): ${errMsg}"
+	fi
+	fEcho_Clean
+	fEcho_Clean "${errMsg}"
+	fEcho_Clean
+	exit 1
+}
+function _fTrap_Exit(){
+	if [[ "${_wasCleanupRun}" == "0" ]]; then  ## String compare is less to fail than integer
+		_wasCleanupRun=1
+		_fSingleExitPoint "${1}" "${2}" "${3}" "${4}" "${5}" "${6}" "${7}" "${8}" "${9}" "${10}" "${11}" "${12}" "${13}" "${14}" "${15}" "${16}" "${17}" "${18}" "${19}" "${20}" "${21}" "${22}" "${23}" "${24}" "${25}" "${26}" "${27}" "${28}" "${29}" "${30}" "${31}" "${32}"
+	fi
+}
+function _fTrap_Error(){
+	if [[ "${_wasCleanupRun}" == "0" ]]; then  ## String compare is less to fail than integer
+		_wasCleanupRun=1
+		fEcho_ResetBlankCounter
+		_fSingleExitPoint "${1}" "${2}" "${3}" "${4}" "${5}" "${6}" "${7}" "${8}" "${9}" "${10}" "${11}" "${12}" "${13}" "${14}" "${15}" "${16}" "${17}" "${18}" "${19}" "${20}" "${21}" "${22}" "${23}" "${24}" "${25}" "${26}" "${27}" "${28}" "${29}" "${30}" "${31}" "${32}"
+	fi
+}
+function _fTrap_Error_Ignore(){ true; }
+function fDefineTrap_Error_Fatal(){ true; trap '_fTrap_Error ERR     ${LINENO} $? $_' ERR; set -e; }
+function fDefineTrap_Error_Ignore(){ trap '_fTrap_Error_Ignore' ERR; set +e; }
+function _fSingleExitPoint(){
+	local -r signal="$1";  shift || true
+	local -r lineNum="$1"; shift || true
+	local -r errNum="$1";  shift || true
+	local -r errMsg="$*"
+	if [[ "${signal}" == "INT" ]]; then
+		fEcho_Force
+		fEcho "User interrupted."
+		fCleanup  ## User cleanup
+		exit 1
+	elif [[ "${errNum}" != "0" ]] && [[ "${errNum}" != "1" ]]; then  ## Clunky string compare is less likely to fail than integer
+		fEcho_Clean
+		fEcho_Clean "Signal .....: '${signal}'"
+		fEcho_Clean "Err# .......: '${errNum}'"
+		fEcho_Clean "Error ......: '${errMsg}'"
+		fEcho_Clean "At line# ...: '${lineNum}'"
+		fEcho_Clean
+		fCleanup  ## User cleanup
+	else
+		fCleanup  ## User cleanup
+	fi
+}
+
+
+
+
+#•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+## Execution entry point (do not modify)
+#•••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+
+## Define error and exit handling
+set -eE
+fDefineTrap_Error_Fatal
+trap '_fTrap_Error SIGHUP  ${LINENO} $? $_' SIGHUP
+trap '_fTrap_Error SIGINT  ${LINENO} $? $_' SIGINT    ## CTRL+C
+trap '_fTrap_Error SIGTERM ${LINENO} $? $_' SIGTERM
+trap '_fTrap_Exit  EXIT    ${LINENO} $? $_' EXIT
+trap '_fTrap_Exit  INT     ${LINENO} $? $_' INT
+trap '_fTrap_Exit  TERM    ${LINENO} $? $_' TERM
+
+fEcho
+fMain "${1}" "${2}" "${3}" "${4}" "${5}" "${6}" "${7}" "${8}" "${9}" "${10}" "${11}" "${12}" "${13}" "${14}" "${15}" "${16}" "${17}" "${18}" "${19}" "${20}"
